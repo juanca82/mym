@@ -1,161 +1,175 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { LogOut, Plus, ClipboardList, Clock, AlertTriangle } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import { useUser } from '../hooks/useUser';
-import { DashboardStats } from '../components/DashboardStats';
+import { useEffect, useState } from "react";
+import { Navigate } from "react-router-dom";
+import { supabase } from "../lib/supabase";
+import { useAuth } from "../context/AuthContext";
+import { useUser } from "../hooks/useUser";
 
-export default function Dashboard() {
-  const navigate = useNavigate();
-  const { user } = useUser();
-  const [stats, setStats] = useState({
+interface SummaryData {
+  totalProjects: number;
+  totalHours: number;
+  openIncidents: number;
+  assignedTasks: number;
+  pendingTasks: number;
+  inProgressTasks: number;
+  completedTasks: number;
+}
+
+const Dashboard = () => {
+  const { session, loading: loadingSession } = useAuth();
+  const { user, loading: loadingUser } = useUser();
+
+  const [summary, setSummary] = useState<SummaryData>({
+    totalProjects: 0,
     totalHours: 0,
-    projectProgress: 0,
-    incidentStats: {
-      open: 0,
-      inProgress: 0,
-      resolved: 0,
-    },
+    openIncidents: 0,
+    assignedTasks: 0,
+    pendingTasks: 0,
+    inProgressTasks: 0,
+    completedTasks: 0,
   });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchDashboardData() {
+    async function fetchSummary() {
       if (!user) return;
 
       try {
-        // Fetch time entries
-        const { data: timeEntries } = await supabase
-          .from('time_entries')
-          .select('total_hours');
-        
-        // Fetch projects
-        const { data: projects } = await supabase
-          .from('projects')
-          .select('progress');
-        
-        // Fetch incidents
-        const { data: incidents } = await supabase
-          .from('incidents')
-          .select('status');
+        const { role } = user;
+        let totalProjects = 0;
+        let totalHours = 0;
+        let openIncidents = 0;
+        let assignedTasks = 0;
+        let pendingTasks = 0;
+        let inProgressTasks = 0;
+        let completedTasks = 0;
 
-        // Calculate stats
-        const totalHours = timeEntries?.reduce((sum, entry) => sum + (entry.total_hours || 0), 0) || 0;
-        const avgProgress = projects?.length 
-          ? projects.reduce((sum, proj) => sum + proj.progress, 0) / projects.length 
-          : 0;
-        
-        const incidentCounts = {
-          open: incidents?.filter(i => i.status === 'open').length || 0,
-          inProgress: incidents?.filter(i => i.status === 'in_progress').length || 0,
-          resolved: incidents?.filter(i => i.status === 'resolved').length || 0,
-        };
+        if (role === "manager") {
+          const { data: projects, error: projectError } = await supabase.from("projects").select("id");
+          if (projectError) throw projectError;
+          totalProjects = projects?.length || 0;
 
-        setStats({
+          const currentMonth = new Date().toISOString().slice(0, 7);
+          const { data: hoursData, error: hoursError } = await supabase
+            .from("time_entries")
+            .select("check_in, total_hours");
+          if (hoursError) throw hoursError;
+          totalHours = hoursData
+            ?.filter((entry) => entry.check_in?.startsWith(currentMonth))
+            .reduce((acc, entry) => acc + (entry.total_hours || 0), 0) || 0;
+
+          const { data: incidents, error: incidentsError } = await supabase.from("incidents").select("status");
+          if (incidentsError) throw incidentsError;
+          openIncidents = incidents?.filter((inc) => ["open", "in_progress"].includes(inc.status)).length || 0;
+        }
+
+        if (role === "worker") {
+          const { data: tasks, error: tasksError } = await supabase
+            .from("tasks")
+            .select("id, status")
+            .eq("assigned_to", user.id);
+
+          if (tasksError) throw tasksError;
+          assignedTasks = tasks?.length || 0;
+          pendingTasks = tasks?.filter((task) => task.status === "pending").length || 0;
+          inProgressTasks = tasks?.filter((task) => task.status === "in_progress").length || 0;
+          completedTasks = tasks?.filter((task) => task.status === "completed").length || 0;
+        }
+
+        // ✅ Solución aplicada: Mantener propiedades previas y actualizar solo tareas
+        setSummary((prev) => ({
+          ...prev,
+          assignedTasks,
+          pendingTasks,
+          inProgressTasks,
+          completedTasks,
+          totalProjects,
           totalHours,
-          projectProgress: avgProgress,
-          incidentStats: incidentCounts,
-        });
+          openIncidents,
+        }));
       } catch (error) {
-        console.error('Error fetching dashboard data:', error);
+        console.error("Error obteniendo los datos:", error);
       } finally {
         setLoading(false);
       }
     }
 
-    fetchDashboardData();
+    fetchSummary();
   }, [user]);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate('/login');
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="text-gray-600">Loading...</div>
-      </div>
-    );
+  if (loadingSession || loadingUser || loading) {
+    return <div className="flex items-center justify-center min-h-screen">Cargando...</div>;
   }
 
+  if (!session) return <Navigate to="/login" />;
+
+  const role = user?.role;
+
   return (
-    <div className="min-h-screen bg-gray-100">
-      <nav className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <h1 className="text-xl font-semibold text-gray-900">
-                Dashboard {user?.role && `(${user.role.charAt(0).toUpperCase() + user.role.slice(1)})`}
-              </h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={handleLogout}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-gray-700 bg-gray-100 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
 
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        {/* Stats Section */}
-        <div className="px-4 py-6 sm:px-0">
-          <DashboardStats
-            totalHours={stats.totalHours}
-            projectProgress={stats.projectProgress}
-            incidentStats={stats.incidentStats}
-          />
-        </div>
-
-        {/* Quick Actions */}
-        <div className="px-4 mt-6 sm:px-0">
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {(user?.role === 'admin' || user?.role === 'manager') && (
-                <button
-                  onClick={() => navigate('/projects/new')}
-                  className="flex items-center justify-center p-4 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100"
-                >
-                  <Plus className="h-5 w-5 mr-2" />
-                  New Project
-                </button>
-              )}
-              
-              {(user?.role === 'admin' || user?.role === 'supervisor') && (
-                <button
-                  onClick={() => navigate('/tasks')}
-                  className="flex items-center justify-center p-4 bg-green-50 text-green-700 rounded-lg hover:bg-green-100"
-                >
-                  <ClipboardList className="h-5 w-5 mr-2" />
-                  Manage Tasks
-                </button>
-              )}
-              
-              <button
-                onClick={() => navigate('/time-entries')}
-                className="flex items-center justify-center p-4 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100"
-              >
-                <Clock className="h-5 w-5 mr-2" />
-                Time Entry
-              </button>
-              
-              <button
-                onClick={() => navigate('/incidents')}
-                className="flex items-center justify-center p-4 bg-red-50 text-red-700 rounded-lg hover:bg-red-100"
-              >
-                <AlertTriangle className="h-5 w-5 mr-2" />
-                Report Incident
-              </button>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {role === "manager" && (
+          <>
+            <div className="bg-white shadow-lg rounded-xl p-6 flex flex-col items-center justify-center">
+              <span className="text-4xl mb-2">📊</span>
+              <h3 className="text-lg font-semibold">Proyectos</h3>
+              <p className="text-2xl font-bold">{summary.totalProjects}</p>
+              <p className="text-gray-500 text-sm">Proyectos disponibles</p>
             </div>
-          </div>
-        </div>
-      </main>
+
+            <div className="bg-white shadow-lg rounded-xl p-6 flex flex-col items-center justify-center">
+              <span className="text-4xl mb-2">⏰</span>
+              <h3 className="text-lg font-semibold">Horas</h3>
+              <p className="text-2xl font-bold">{summary.totalHours}</p>
+              <p className="text-gray-500 text-sm">Horas trabajadas este mes</p>
+            </div>
+
+            <div className="bg-white shadow-lg rounded-xl p-6 flex flex-col items-center justify-center">
+              <span className="text-4xl mb-2">⚠️</span>
+              <h3 className="text-lg font-semibold">Incidencias Abiertas</h3>
+              <p className="text-2xl font-bold">{summary.openIncidents}</p>
+              <p className="text-gray-500 text-sm">Incidencias abiertas o en progreso</p>
+            </div>
+          </>
+        )}
+
+        {role === "worker" && (
+          <>
+            <div
+              className="bg-white shadow-lg rounded-xl p-6 flex flex-col items-center justify-center hover:shadow-2xl transition cursor-pointer"
+              onClick={() => (window.location.href = "/mistareas")}
+            >
+              <span className="text-4xl mb-2">⏳</span>
+              <h3 className="text-lg font-semibold">Pendientes</h3>
+              <p className="text-2xl font-bold">{summary.pendingTasks}</p>
+              <p className="text-gray-500 text-sm">Tareas pendientes</p>
+            </div>
+
+            <div
+              className="bg-white shadow-lg rounded-xl p-6 flex flex-col items-center justify-center hover:shadow-2xl transition cursor-pointer"
+              onClick={() => (window.location.href = "/mistareas")}
+            >
+              <span className="text-4xl mb-2">🔄</span>
+              <h3 className="text-lg font-semibold">En Progreso</h3>
+              <p className="text-2xl font-bold">{summary.inProgressTasks}</p>
+              <p className="text-gray-500 text-sm">Tareas en progreso</p>
+            </div>
+
+            <div
+              className="bg-white shadow-lg rounded-xl p-6 flex flex-col items-center justify-center hover:shadow-2xl transition cursor-pointer"
+              onClick={() => (window.location.href = "/mistareas")}
+            >
+              <span className="text-4xl mb-2">✅</span>
+              <h3 className="text-lg font-semibold">Completadas</h3>
+              <p className="text-2xl font-bold">{summary.completedTasks}</p>
+              <p className="text-gray-500 text-sm">Tareas completadas</p>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
-}
+};
+
+export default Dashboard;

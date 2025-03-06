@@ -78,17 +78,17 @@ CREATE TABLE IF NOT EXISTS time_entries (
   user_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
   check_in TIMESTAMPTZ NOT NULL,
   break_start TIMESTAMPTZ,
-  break_end TIMESTAMPTZ,
   check_out TIMESTAMPTZ,
   total_hours DECIMAL(5,2),
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now(),
+  
+  -- Validaciones
   CONSTRAINT break_time_check CHECK (
-    (break_start IS NULL AND break_end IS NULL) OR
-    (break_start IS NOT NULL AND break_end IS NOT NULL AND break_start < break_end)
+    break_start IS NULL OR (check_in < break_start)  -- El descanso debe ser después de la entrada
   ),
   CONSTRAINT check_time_order CHECK (
-    check_in < check_out
+    check_out IS NULL OR check_in < check_out  -- Permitir salida NULL hasta que se registre
   )
 );
 

@@ -1,5 +1,3 @@
-import { Database } from '@supabase/supabase-js';
-
 export type UserRole = 'admin' | 'manager' | 'supervisor' | 'worker';
 export type TaskStatus = 'pending' | 'in_progress' | 'completed';
 export type IncidentStatus = 'open' | 'in_progress' | 'resolved';
@@ -33,6 +31,8 @@ export interface Task {
   status: TaskStatus;
   created_at: string;
   updated_at: string;
+  user_profiles?: UserProfile; // Relación con el usuario asignado
+  projects?: Project; // Relación con el proyecto
 }
 
 export interface TimeEntry {
