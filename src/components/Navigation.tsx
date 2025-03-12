@@ -13,8 +13,8 @@ export default function Navigation() {
 
   // Definir botones por rol
   const rolePermissions = {
-    worker: ["/time-clock", "/incidents", "/profile", "/my-tasks"],
-    supervisor: ["/time-clock", "/manage-incidents", "/tasks", "/my-tasks", "/profile", "/projects"],
+    worker: ["/time-clock", "/incidents", "/profile", "/mistareas"], // ✅ Corrección aquí
+    supervisor: ["/time-clock", "/manage-incidents", "/tasks", "/reportes", "/profile", "/projects"],
     manager: ["/manage-incidents", "/tasks", "/reportes", "/profile", "/projects"],
   };
 
@@ -63,7 +63,7 @@ export default function Navigation() {
               <NavItem to="/time-clock" icon={Clock} label="Fichar Horas" />
               <NavItem to="/incidents" icon={AlertTriangle} label="Reportar Incidencia" />
               <NavItem to="/profile" icon={User} label="Perfil" />
-              <NavItem to="/my-tasks" icon={ClipboardList} label="Mis Tareas" />
+              <NavItem to="/mistareas" icon={ClipboardList} label="Mis Tareas" /> {/* ✅ Ruta corregida */}
               <NavItem to="/manage-incidents" icon={ShieldCheck} label="Gestionar Incidencias" />
               <NavItem to="/tasks" icon={ClipboardList} label="Asignar Tareas" />
               <NavItem to="/projects" icon={FolderPlus} label="Crear Proyecto" />

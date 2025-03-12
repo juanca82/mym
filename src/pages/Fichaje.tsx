@@ -57,11 +57,16 @@ export default function TimeClock() {
     } else if (action === "checkOut" && entry) {
       const checkInTime = new Date(entry.check_in!);
       const checkOutTime = new Date();
-      const totalHours = ((checkOutTime.getTime() - checkInTime.getTime()) / (1000 * 60 * 60)).toFixed(2);
+
+      // ✅ Calcular la diferencia en milisegundos entre entrada y salida
+      const diffMs = checkOutTime.getTime() - checkInTime.getTime();
+
+      // ✅ Convertir correctamente a horas enteras (redondeando hacia abajo)
+      const totalHours = Math.floor(diffMs / (1000 * 60 * 60));
 
       updateData = { 
         check_out: checkOutTime.toISOString(),
-        total_hours: parseFloat(totalHours) // Solo calculamos check_in → check_out
+        total_hours: totalHours // Solo cálculo de check_in → check_out
       };
     }
 

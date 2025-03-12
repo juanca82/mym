@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { useUser } from "../hooks/useUser";
@@ -17,6 +17,7 @@ interface SummaryData {
 const Dashboard = () => {
   const { session, loading: loadingSession } = useAuth();
   const { user, loading: loadingUser } = useUser();
+  const navigate = useNavigate();
 
   const [summary, setSummary] = useState<SummaryData>({
     totalProjects: 0,
@@ -43,7 +44,7 @@ const Dashboard = () => {
         let inProgressTasks = 0;
         let completedTasks = 0;
 
-        if (role === "manager") {
+        if (role === "manager" || role === "supervisor") {
           const { data: projects, error: projectError } = await supabase.from("projects").select("id");
           if (projectError) throw projectError;
           totalProjects = projects?.length || 0;
@@ -63,19 +64,29 @@ const Dashboard = () => {
         }
 
         if (role === "worker") {
+          if (!user.id) {
+            console.error("Error: `user.id` no está definido.");
+            return;
+          }
+
           const { data: tasks, error: tasksError } = await supabase
             .from("tasks")
             .select("id, status")
             .eq("assigned_to", user.id);
 
-          if (tasksError) throw tasksError;
+          if (tasksError) {
+            console.error("Error obteniendo tareas:", tasksError);
+            throw tasksError;
+          }
+
+          console.log("Tareas obtenidas:", tasks);
+
           assignedTasks = tasks?.length || 0;
           pendingTasks = tasks?.filter((task) => task.status === "pending").length || 0;
           inProgressTasks = tasks?.filter((task) => task.status === "in_progress").length || 0;
           completedTasks = tasks?.filter((task) => task.status === "completed").length || 0;
         }
 
-        // ✅ Solución aplicada: Mantener propiedades previas y actualizar solo tareas
         setSummary((prev) => ({
           ...prev,
           assignedTasks,
@@ -109,7 +120,7 @@ const Dashboard = () => {
       <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {role === "manager" && (
+        {(role === "manager" || role === "supervisor") && (
           <>
             <div className="bg-white shadow-lg rounded-xl p-6 flex flex-col items-center justify-center">
               <span className="text-4xl mb-2">📊</span>
@@ -137,8 +148,8 @@ const Dashboard = () => {
         {role === "worker" && (
           <>
             <div
-              className="bg-white shadow-lg rounded-xl p-6 flex flex-col items-center justify-center hover:shadow-2xl transition cursor-pointer"
-              onClick={() => (window.location.href = "/mistareas")}
+              className="bg-white shadow-lg rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer"
+              onClick={() => navigate("/mistareas?status=pending")}
             >
               <span className="text-4xl mb-2">⏳</span>
               <h3 className="text-lg font-semibold">Pendientes</h3>
@@ -147,8 +158,8 @@ const Dashboard = () => {
             </div>
 
             <div
-              className="bg-white shadow-lg rounded-xl p-6 flex flex-col items-center justify-center hover:shadow-2xl transition cursor-pointer"
-              onClick={() => (window.location.href = "/mistareas")}
+              className="bg-white shadow-lg rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer"
+              onClick={() => navigate("/mistareas?status=in_progress")}
             >
               <span className="text-4xl mb-2">🔄</span>
               <h3 className="text-lg font-semibold">En Progreso</h3>
@@ -157,8 +168,8 @@ const Dashboard = () => {
             </div>
 
             <div
-              className="bg-white shadow-lg rounded-xl p-6 flex flex-col items-center justify-center hover:shadow-2xl transition cursor-pointer"
-              onClick={() => (window.location.href = "/mistareas")}
+              className="bg-white shadow-lg rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer"
+              onClick={() => navigate("/mistareas?status=completed")}
             >
               <span className="text-4xl mb-2">✅</span>
               <h3 className="text-lg font-semibold">Completadas</h3>

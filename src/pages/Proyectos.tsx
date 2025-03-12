@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { Loader, PlusCircle, Edit, Trash2 } from "lucide-react";
 import Navigation from "../components/Navigation";
+import { useUser } from "../hooks/useUser"; // Importamos el usuario para obtener su rol
 
 interface Project {
   id: string;
@@ -14,11 +15,12 @@ interface Project {
 }
 
 export default function Proyectos() {
+  const { user } = useUser(); // Obtener el usuario actual y su rol
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  // Estado para crear/editar
+  // Estado para crear/editar proyectos
   const [projectId, setProjectId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -46,8 +48,14 @@ export default function Proyectos() {
     e.preventDefault();
     if (!name || !startDate || !deadline || progress < 0 || progress > 100) return;
 
+    // 🚨 Verificar si el usuario tiene permiso para crear proyectos
+    if (user?.role !== "manager" && user?.role !== "supervisor") {
+      alert("❌ No tienes permisos para crear proyectos.");
+      return;
+    }
+
     setSubmitting(true);
-    
+
     if (projectId) {
       const { error } = await supabase
         .from("projects")
@@ -82,6 +90,13 @@ export default function Proyectos() {
 
   async function confirmDelete() {
     if (!projectToDelete) return;
+
+    // 🚨 Verificar si el usuario tiene permisos para eliminar
+    if (user?.role !== "manager" && user?.role !== "supervisor") {
+      alert("❌ No tienes permisos para eliminar proyectos.");
+      return;
+    }
+
     const { error } = await supabase.from("projects").delete().eq("id", projectToDelete.id);
 
     if (!error) {
@@ -93,6 +108,12 @@ export default function Proyectos() {
   }
 
   function handleEdit(project: Project) {
+    // 🚨 Verificar si el usuario tiene permisos para editar
+    if (user?.role !== "manager" && user?.role !== "supervisor") {
+      alert("❌ No tienes permisos para editar proyectos.");
+      return;
+    }
+
     setProjectId(project.id);
     setName(project.name);
     setDescription(project.description);
@@ -149,6 +170,19 @@ export default function Proyectos() {
           </button>
         </form>
 
+        {deleteModalOpen && (
+          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
+            <div className="bg-white p-6 rounded-lg shadow-md">
+              <h2 className="text-xl font-bold mb-4">Confirmar Eliminación</h2>
+              <p>¿Estás seguro de que deseas eliminar el proyecto?</p>
+              <div className="mt-6 flex justify-end space-x-4">
+                <button onClick={() => setDeleteModalOpen(false)} className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg">Cancelar</button>
+                <button onClick={confirmDelete} className="bg-red-600 text-white px-4 py-2 rounded-lg">Eliminar</button>
+              </div>
+            </div>
+          </div>
+        )}
+        
         <h3 className="text-xl font-semibold mb-4">Proyectos Creados</h3>
         {loading ? (
           <div className="flex justify-center py-6">
@@ -163,31 +197,14 @@ export default function Proyectos() {
                   <p className="text-gray-600">{project.description || "Sin descripción"}</p>
                 </div>
                 <div className="flex space-x-3">
-                  <button onClick={() => handleEdit(project)} className="text-blue-600 hover:text-blue-800">
-                    <Edit className="h-5 w-5" />
-                  </button>
-                  <button onClick={() => handleDeleteClick(project)} className="text-red-600 hover:text-red-800">
-                    <Trash2 className="h-5 w-5" />
-                  </button>
+                  <button onClick={() => handleEdit(project)} className="text-blue-600 hover:text-blue-800"><Edit className="h-5 w-5" /></button>
+                  <button onClick={() => handleDeleteClick(project)} className="text-red-600 hover:text-red-800"><Trash2 className="h-5 w-5" /></button>
                 </div>
               </li>
             ))}
           </ul>
         )}
       </div>
-
-      {deleteModalOpen && (
-        <div className="fixed inset-0 flex items-center justify-center bg-gray-900 bg-opacity-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg text-center">
-            <h2 className="text-lg font-semibold">¿Eliminar este proyecto?</h2>
-            <p className="text-gray-600">{projectToDelete?.name}</p>
-            <div className="flex justify-center mt-4 space-x-4">
-              <button onClick={() => setDeleteModalOpen(false)} className="bg-gray-500 text-white px-4 py-2 rounded-lg">Cancelar</button>
-              <button onClick={confirmDelete} className="bg-red-600 text-white px-4 py-2 rounded-lg">Eliminar</button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }
